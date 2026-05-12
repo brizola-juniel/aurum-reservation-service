@@ -1,0 +1,55 @@
+name: reservation-service-ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reservation-quality:
+    name: reservation-quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Lint and test inside Python 3.13 container
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            python:3.13-slim \
+            sh -lc "mkdir -p TestResults && python -m pip install --upgrade pip --root-user-action=ignore && python -m pip install --root-user-action=ignore -e '.[dev]' && ruff check app tests && pytest tests --cov=app --cov-report=term-missing --cov-fail-under=68 --junitxml=TestResults/reservation-service-pytest.xml"
+
+      - name: Advisory type check
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            python:3.13-slim \
+            sh -lc "python -m pip install --upgrade pip --root-user-action=ignore && python -m pip install --root-user-action=ignore -e '.[dev]' && mypy app"
+
+      - name: Build runtime image
+        run: docker build --pull --tag aurum-reservation-service:ci .
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: reservation-service-test-results
+          path: TestResults
+          if-no-files-found: warn
+          retention-days: 14

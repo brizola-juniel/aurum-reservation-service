@@ -1,6 +1,14 @@
-# Reservation Service
+# Aurum Reservation Service
 
 Microsserviço Python responsável por locais, salas, reservas e validação de conflitos de horário.
+
+Este diretório funciona em dois formatos:
+
+- `reservation-service/` dentro do monorepo `reservation-system`.
+- Repositório standalone exportado como `aurum-reservation-service`.
+
+Todos os comandos oficiais são Docker-first. Não use Python, venv, Alembic ou PostgreSQL
+instalados no host como caminho de validação.
 
 ## Responsabilidade
 
@@ -20,6 +28,8 @@ Microsserviço Python responsável por locais, salas, reservas e validação de 
 - Alembic 1.17 para migrations versionadas.
 - PostgreSQL via asyncpg.
 - pytest 9, pytest-asyncio, ruff e coverage.
+- GitHub Actions Docker-only com `python:3.13-slim`.
+- Dependabot para pip, GitHub Actions e Docker.
 
 ## Variáveis
 
@@ -84,6 +94,13 @@ Comandos oficiais pela raiz do monorepo:
 Esses comandos usam Docker/Compose e Python 3.13 em container; não exigem venv nem Alembic
 instalado no host.
 
+No repositório standalone, aplique migrations com o mesmo padrão Docker-first do runtime:
+
+```bash
+docker run --rm --env-file .env --network host aurum-reservation-service:local \
+  alembic upgrade head
+```
+
 ## Seed
 
 Depois das migrations, ao iniciar com banco vazio, o serviço cria:
@@ -96,23 +113,56 @@ Depois das migrations, ao iniciar com banco vazio, o serviço cria:
 
 ## Rodar via Docker
 
+Pela raiz do monorepo:
+
 ```bash
 ./scripts/dev-up.sh
 ```
 
-Este projeto é Docker-first. Não é necessário instalar Python, venv ou PostgreSQL no host.
+No repositório standalone:
+
+```bash
+docker build --pull --no-cache -t aurum-reservation-service:local .
+docker run --rm --env-file .env -p 8000:8000 aurum-reservation-service:local
+```
 
 ## Testes
 
-Na raiz:
+Gate completo pela raiz do monorepo:
 
 ```bash
 ./scripts/test-all.sh
 ```
 
-Somente este serviço:
+Gate focado no serviço pela raiz do monorepo:
 
 ```bash
-docker run --rm -v "$PWD:/workspace" -w /workspace/reservation-service python:3.13-slim \
-  sh -lc "python -m pip install --upgrade pip && python -m pip install -e '.[dev]' && ruff check app tests && pytest tests --cov=app"
+docker run --rm -v "$PWD/reservation-service:/src:ro" -w /workspace python:3.13-slim \
+  sh -lc "cp -a /src/. /workspace && python -m pip install --upgrade pip && python -m pip install -e '.[dev]' && ruff check app tests && pytest tests --cov=app --cov-report=term-missing --cov-fail-under=68"
 ```
+
+Gate focado no repositório standalone:
+
+```bash
+docker run --rm -v "$PWD:/src:ro" -w /workspace python:3.13-slim \
+  sh -lc "cp -a /src/. /workspace && python -m pip install --upgrade pip && python -m pip install -e '.[dev]' && ruff check app tests && pytest tests --cov=app --cov-report=term-missing --cov-fail-under=68"
+```
+
+Build da imagem runtime no repositório standalone:
+
+```bash
+docker build --pull --no-cache -t aurum-reservation-service:local .
+```
+
+## CI e governança
+
+O repositório standalone inclui:
+
+- `.github/workflows/ci.yml`: lint, testes, coverage e build de imagem em Docker.
+- `.github/dependabot.yml`: atualizações semanais para pip, Actions e Docker.
+- `SECURITY.md`: política operacional e checklist de segurança.
+- `TESTING.md`: comandos Docker-only para validação local e CI.
+
+O job bloqueante do CI usa `ruff` e `pytest` com coverage mínimo de 68%, que corresponde
+ao baseline atual do serviço. `mypy` roda como sinal não bloqueante porque há dívida de
+tipagem existente fora deste escopo de endurecimento documental/CI.
