@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -56,3 +56,7 @@ class Reservation(Base):
 
     location: Mapped[Location] = relationship(back_populates="reservations")
     room: Mapped[Room] = relationship(back_populates="reservations")
+
+
+Index("uq_locations_name_ci", func.lower(Location.name), unique=True)
+Index("uq_rooms_location_name_ci", Room.location_id, func.lower(Room.name), unique=True)

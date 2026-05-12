@@ -35,7 +35,7 @@ instalados no host como caminho de validação.
 
 ```env
 DATABASE_URL=postgresql+asyncpg://reservations:reservations@localhost:5434/reservationsdb
-JWT_SECRET=change-this-shared-secret-with-at-least-32-bytes
+JWT_SECRET=<mesmo-secret-forte-do-auth-service>
 JWT_ISSUER=aurum-auth-service
 JWT_AUDIENCE=aurum-reservation-system
 CORS_ALLOWED_ORIGINS=http://localhost:3000
@@ -75,9 +75,14 @@ Em PostgreSQL, criação e edição de reserva também adquirem `pg_advisory_xac
 por sala antes da validação, mantendo a regra protegida contra concorrência dentro
 da transação.
 
+Quando a reserva solicita café, `attendees` precisa ser informado e não pode exceder a
+capacidade da sala. Reduzir a capacidade de uma sala abaixo da maior reserva existente
+ou mover sala com reservas para outro local retorna erro de domínio.
+
 ## Migrations
 
 - Migration inicial: `alembic/versions/202605120001_initial_reservation_schema.py`.
+- Migration de unicidade case-insensitive: `alembic/versions/202605120002_add_case_insensitive_location_room_uniqueness.py`.
 - Histórico em runtime: tabela PostgreSQL `alembic_version`.
 - No PostgreSQL, o schema é aplicado por `../scripts/reservation-migration-apply.sh`.
 - O startup executa `alembic upgrade head` como proteção idempotente.
@@ -138,14 +143,14 @@ Gate focado no serviço pela raiz do monorepo:
 
 ```bash
 docker run --rm -v "$PWD/reservation-service:/src:ro" -w /workspace python:3.13-slim \
-  sh -lc "cp -a /src/. /workspace && python -m pip install --upgrade pip && python -m pip install -e '.[dev]' && ruff check app tests && pytest tests --cov=app --cov-report=term-missing --cov-fail-under=68"
+  sh -lc "cp -a /src/. /workspace && python -m pip install --upgrade pip && python -m pip install -e '.[dev]' && ruff check app tests && pytest tests --cov=app --cov-report=term-missing --cov-fail-under=68 && mypy app"
 ```
 
 Gate focado no repositório standalone:
 
 ```bash
 docker run --rm -v "$PWD:/src:ro" -w /workspace python:3.13-slim \
-  sh -lc "cp -a /src/. /workspace && python -m pip install --upgrade pip && python -m pip install -e '.[dev]' && ruff check app tests && pytest tests --cov=app --cov-report=term-missing --cov-fail-under=68"
+  sh -lc "cp -a /src/. /workspace && python -m pip install --upgrade pip && python -m pip install -e '.[dev]' && ruff check app tests && pytest tests --cov=app --cov-report=term-missing --cov-fail-under=68 && mypy app"
 ```
 
 Build da imagem runtime no repositório standalone:
@@ -163,6 +168,4 @@ O repositório standalone inclui:
 - `SECURITY.md`: política operacional e checklist de segurança.
 - `TESTING.md`: comandos Docker-only para validação local e CI.
 
-O job bloqueante do CI usa `ruff` e `pytest` com coverage mínimo de 68%, que corresponde
-ao baseline atual do serviço. `mypy` roda como sinal não bloqueante porque há dívida de
-tipagem existente fora deste escopo de endurecimento documental/CI.
+O job bloqueante do CI usa `ruff`, `pytest` com coverage mínimo de 68% e `mypy app`.

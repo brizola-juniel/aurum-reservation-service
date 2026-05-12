@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Annotated
+from uuid import UUID
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -40,9 +41,23 @@ async def get_current_user(
             detail="Invalid token",
         ) from exc
 
-    subject = payload.get("sub")
-    email = payload.get("email")
-    if not isinstance(subject, str) or not isinstance(email, str):
+    raw_subject = payload.get("sub")
+    raw_email = payload.get("email")
+    if not isinstance(raw_subject, str) or not isinstance(raw_email, str):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
+
+    try:
+        subject = str(UUID(raw_subject))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims") from exc
+
+    email = raw_email.strip()
+    if (
+        not email
+        or len(email) > 320
+        or "@" not in email
+        or any(character.isspace() for character in email)
+    ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
 
     return CurrentUser(id=subject, email=email)
