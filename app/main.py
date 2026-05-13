@@ -17,7 +17,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="Aurum Reservation Service", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="Aurum Reservation Service", version="1.0.1", lifespan=lifespan)
 
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
